@@ -1,39 +1,68 @@
-# ==========================================
-#   НАСТРОЙКИ БОТА — ЗАПОЛНИ ЭТИ ДАННЫЕ
-# ==========================================
+from supabase import create_client, Client
+from config import SUPABASE_URL, SUPABASE_KEY
 
-BOT_TOKEN = "8759598030:AAEusHWpuOQP_iAomG_B6xSGM4v0Th2HyUY"
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Supabase
-SUPABASE_URL = "https://fondnotpqddvmitbimgj.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZvbmRub3RwcWRkdm1pdGJpbWdqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODc3MjEyOCwiZXhwIjoyMDk0MzQ4MTI4fQ.UW7XOgWj-9PmSZwqErhvFAssLR6PwYmvTrZwwlKlmI4"
 
-# Канал куда публикуются одобренные жалобы (подписка тоже на него)
-CHANNEL_ID = -1003818586201
-CHANNEL_LINK = "https://t.me/+ССЫЛКА_НА_КАНАЛ"  # замени на ссылку канала
+async def check_scam_by_id(telegram_id: int):
+    res = supabase.table("scam_base").select("*").eq("telegram_id", telegram_id).execute()
+    return res.data if res.data else None
 
-# Группа модерации (куда приходят жалобы на проверку админам)
-MODERATION_GROUP_ID = -1003856428134
 
-# FAQ текст
-FAQ_TEXT = """
-❓ <b>Часто задаваемые вопросы</b>
+async def check_scam_by_username(username: str):
+    username = username.lower().lstrip("@")
+    res = supabase.table("scam_base").select("*").ilike("username", username).execute()
+    return res.data if res.data else None
 
-<b>Что такое скам-база?</b>
-Это база данных мошенников, подтверждённых нашими модераторами с доказательствами.
 
-<b>Как подать жалобу?</b>
-Нажми кнопку «📝 Подать жалобу» и следуй инструкциям. Прикрепи доказательства (фото/видео) и опиши ситуацию.
+async def check_scam_by_phone(phone: str):
+    res = supabase.table("scam_base").select("*").eq("phone", phone).execute()
+    return res.data if res.data else None
 
-<b>Как проверить человека?</b>
-Нажми «🔍 Проверить», выбери способ поиска и введи данные пользователя.
 
-<b>Жалоба рассматривается как долго?</b>
-Обычно в течение 24 часов. Модераторы проверяют каждое обращение.
+async def add_to_scam_base(data: dict):
+    res = supabase.table("scam_base").insert(data).execute()
+    return res.data
 
-<b>Что значит «Репутация: чист»?</b>
-Жалоб на этого пользователя не поступало. Однако всегда соблюдайте бдительность.
 
-<b>Что значит «Репутация: мошенник»?</b>
-Пользователь добавлен в скам-базу с подтверждёнными доказательствами. Сделки недопустимы.
-"""
+async def create_pending_report(data: dict):
+    res = supabase.table("pending_reports").insert(data).execute()
+    return res.data[0] if res.data else None
+
+
+async def get_pending_report(report_id: int):
+    res = supabase.table("pending_reports").select("*").eq("id", report_id).execute()
+    return res.data[0] if res.data else None
+
+
+async def update_report_status(report_id: int, status: str):
+    supabase.table("pending_reports").update({"status": status}).eq("id", report_id).execute()
+
+
+async def update_report_moderation_msg(report_id: int, msg_id: int):
+    supabase.table("pending_reports").update({"moderation_message_id": msg_id}).eq("id", report_id).execute()
+
+
+async def get_all_scammers(limit=50):
+    res = supabase.table("scam_base").select("*").order("added_at", desc=True).limit(limit).execute()
+    return res.data
+
+
+async def get_pending_reports(limit=50):
+    res = supabase.table("pending_reports").select("*").eq("status", "pending").order("submitted_at").limit(limit).execute()
+    return res.data
+
+
+async def delete_from_scam_base(record_id: int):
+    supabase.table("scam_base").delete().eq("id", record_id).execute()
+
+
+async def log_search(user_id: int, query: str, found: bool):
+    try:
+        supabase.table("search_logs").insert({
+            "searched_by": user_id,
+            "query": query,
+            "found": found
+        }).execute()
+    except:
+        pass
